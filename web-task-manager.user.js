@@ -15,16 +15,24 @@
 (function () {
     "use strict";
 
-    // ===============================
-    // UI Setup
-    // ===============================
+    // === LocalStorageキー ===
+    const STORE_KEY = "webTaskManagerSettings";
+
+    // === 設定読み込み ===
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+    let dark = saved.dark ?? true;
+    let minimized = saved.minimized ?? false;
+    let hideGraph = saved.hideGraph ?? false;
+    let pos = saved.pos ?? { x: null, y: null };
+
+    // === コンテナ作成 ===
     const wrapper = document.createElement("div");
     wrapper.style.cssText = `
         position: fixed;
         right: 20px;
         bottom: 20px;
         width: 320px;
-        height: 200px;
+        height: 220px;
         background: rgba(0,0,0,0.7);
         color: #00ff88;
         font-family: Consolas, monospace;
@@ -35,91 +43,77 @@
         padding: 8px;
         box-sizing: border-box;
         user-select: none;
+        cursor: move;
         overflow: hidden;
     `;
+    if (pos.x !== null && pos.y !== null) {
+        wrapper.style.left = pos.x + "px";
+        wrapper.style.top = pos.y + "px";
+        wrapper.style.right = "auto";
+        wrapper.style.bottom = "auto";
+    }
     document.body.appendChild(wrapper);
 
-    // ===============================
-    // Title bar + control buttons
-    // ===============================
+    // === タイトルバー ===
     const titleBar = document.createElement("div");
     titleBar.style.cssText = `
         font-weight: bold;
+        margin-bottom: 4px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        cursor: move;
     `;
-    const titleText = document.createElement("span");
-    titleText.textContent = "[ Web Task Manager ]";
-
-    const btnBox = document.createElement("div");
-    btnBox.style.display = "flex";
-    btnBox.style.gap = "4px";
-
-    function makeBtn(label) {
-        const b = document.createElement("button");
-        b.textContent = label;
-        b.style.cssText = `
-            background: none;
-            color: inherit;
-            border: 1px solid currentColor;
-            border-radius: 3px;
-            font-size: 11px;
-            padding: 1px 5px;
-            cursor: pointer;
-        `;
-        b.onmouseenter = () => (b.style.background = "rgba(255,255,255,0.1)");
-        b.onmouseleave = () => (b.style.background = "none");
-        return b;
-    }
-
-    const btnTheme = makeBtn("🌙");
-    const btnMin = makeBtn("－");
-    const btnClose = makeBtn("✕");
-    btnBox.append(btnTheme, btnMin, btnClose);
-    titleBar.append(titleText, btnBox);
+    titleBar.innerHTML = `
+        <span>[ Web Task Manager ]</span>
+        <div style="display:flex; gap:4px;">
+            <button id="graphBtn" title="Show/Hide Graph" style="background:none;border:1px solid #00ff88;color:#00ff88;border-radius:4px;width:22px;height:22px;cursor:pointer;">${hideGraph ? "📈" : "📉"}</button>
+            <button id="themeBtn" title="Toggle Theme" style="background:none;border:1px solid #00ff88;color:#00ff88;border-radius:4px;width:22px;height:22px;cursor:pointer;">${dark ? "🌙" : "☀️"}</button>
+            <button id="minBtn" title="Minimize" style="background:none;border:1px solid #00ff88;color:#00ff88;border-radius:4px;width:22px;height:22px;cursor:pointer;">－</button>
+            <button id="closeBtn" title="Close" style="background:none;border:1px solid #00ff88;color:#00ff88;border-radius:4px;width:22px;height:22px;cursor:pointer;">✕</button>
+        </div>
+    `;
     wrapper.appendChild(titleBar);
 
-    // ===============================
-    // Info + Graph
-    // ===============================
     const info = document.createElement("div");
     const canvas = document.createElement("canvas");
     canvas.width = 300;
     canvas.height = 60;
     const ctx = canvas.getContext("2d");
-    wrapper.append(info, canvas);
 
-    // ===============================
-    // Theme toggle
-    // ===============================
-    let dark = true;
-    function toggleTheme() {
-        dark = !dark;
+    const legend = document.createElement("div");
+    legend.style.cssText = "font-size:11px; margin-top:2px;";
+    legend.innerHTML = "🟩CPU　🟦GPU　🟧MEM";
+
+    wrapper.appendChild(info);
+    wrapper.appendChild(canvas);
+    wrapper.appendChild(legend);
+
+    // === テーマ切り替え ===
+    function applyTheme() {
+        const color = dark ? "#00ff88" : "#003300";
         wrapper.style.background = dark ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.9)";
-        wrapper.style.color = dark ? "#00ff88" : "#003300";
-        wrapper.style.border = dark ? "1px solid #00ff88" : "1px solid #003300";
-        btnBox.querySelectorAll("button").forEach(b => {
-            b.style.color = dark ? "#00ff88" : "#003300";
-            b.style.border = dark ? "1px solid #00ff88" : "1px solid #003300";
-        });
-        btnTheme.textContent = dark ? "🌙" : "☀️";
+        wrapper.style.color = color;
+        wrapper.style.border = `1px solid ${color}`;
+        for (const btn of wrapper.querySelectorAll("button")) {
+            btn.style.border = `1px solid ${color}`;
+            btn.style.color = color;
+        }
     }
+    applyTheme();
 
-    // ===============================
-    // Drag move
-    // ===============================
+    // === ドラッグ移動 ===
     let isDragging = false, offsetX = 0, offsetY = 0;
     titleBar.addEventListener("mousedown", (e) => {
+        if (e.target.tagName === "BUTTON") return;
         isDragging = true;
         offsetX = e.clientX - wrapper.offsetLeft;
         offsetY = e.clientY - wrapper.offsetTop;
-        titleBar.style.cursor = "grabbing";
+        wrapper.style.cursor = "grabbing";
     });
     document.addEventListener("mouseup", () => {
+        if (isDragging) saveSettings();
         isDragging = false;
-        titleBar.style.cursor = "move";
+        wrapper.style.cursor = "move";
     });
     document.addEventListener("mousemove", (e) => {
         if (!isDragging) return;
@@ -129,9 +123,7 @@
         wrapper.style.bottom = "auto";
     });
 
-    // ===============================
-    // System Info (GPU / CPU)
-    // ===============================
+    // === GPU情報 ===
     let gpuName = "GPU: Unknown";
     try {
         const c = document.createElement("canvas");
@@ -145,12 +137,9 @@
             }
         }
     } catch {}
-
     const cpuThreads = navigator.hardwareConcurrency || "N/A";
 
-    // ===============================
-    // Graph Data
-    // ===============================
+    // === グラフ ===
     const cpuHistory = Array(60).fill(0);
     const gpuHistory = Array(60).fill(0);
     const memHistory = Array(60).fill(0);
@@ -159,7 +148,6 @@
     function randomUsage(base) {
         return Math.min(100, Math.max(0, base + (Math.random() - 0.5) * 10));
     }
-
     function drawGraph() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         const drawLine = (arr, color) => {
@@ -178,10 +166,6 @@
         drawLine(gpuHistory, "#00aaff");
         drawLine(memHistory, "#ffaa00");
     }
-
-    // ===============================
-    // Update Loop
-    // ===============================
     function updateStats() {
         cpuUsage = randomUsage(cpuUsage);
         gpuUsage = randomUsage(gpuUsage);
@@ -200,28 +184,60 @@
         GPU: ${gpuUsage.toFixed(1)}%<br>
         MEM: ${memUsage.toFixed(1)}%`;
 
-        drawGraph();
+        if (!hideGraph) drawGraph();
     }
-
     setInterval(updateStats, 1000 / 30);
 
-    // ===============================
-    // Button Actions
-    // ===============================
-    let minimized = false;
-    btnMin.onclick = () => {
+    // === UI状態復元 ===
+    if (minimized) {
+        info.style.display = "none";
+        canvas.style.display = "none";
+        legend.style.display = "none";
+        wrapper.style.height = "40px";
+    }
+    if (hideGraph) {
+        canvas.style.display = "none";
+        legend.style.display = "none";
+    }
+
+    // === 保存関数 ===
+    function saveSettings() {
+        localStorage.setItem(
+            STORE_KEY,
+            JSON.stringify({
+                dark,
+                minimized,
+                hideGraph,
+                pos: {
+                    x: wrapper.offsetLeft,
+                    y: wrapper.offsetTop,
+                },
+            })
+        );
+    }
+
+    // === ボタン ===
+    document.getElementById("themeBtn").onclick = () => {
+        dark = !dark;
+        applyTheme();
+        saveSettings();
+    };
+    document.getElementById("minBtn").onclick = () => {
         minimized = !minimized;
         info.style.display = minimized ? "none" : "block";
-        canvas.style.display = minimized ? "none" : "block";
-        wrapper.style.height = minimized ? "35px" : "200px";
-        btnMin.textContent = minimized ? "＋" : "－";
+        canvas.style.display = minimized || hideGraph ? "none" : "block";
+        legend.style.display = minimized || hideGraph ? "none" : "block";
+        wrapper.style.height = minimized ? "40px" : "220px";
+        saveSettings();
+    };
+    document.getElementById("closeBtn").onclick = () => wrapper.remove();
+    document.getElementById("graphBtn").onclick = () => {
+        hideGraph = !hideGraph;
+        canvas.style.display = hideGraph ? "none" : "block";
+        legend.style.display = hideGraph ? "none" : "block";
+        document.getElementById("graphBtn").textContent = hideGraph ? "📈" : "📉";
+        saveSettings();
     };
 
-    btnTheme.onclick = toggleTheme;
-    btnClose.onclick = () => wrapper.remove();
-
-    // ===============================
-    // Start
-    // ===============================
     updateStats();
 })();
