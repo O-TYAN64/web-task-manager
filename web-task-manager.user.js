@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Web Task Manager
 // @namespace    https://github.com/O-TYAN64/web-task-manager
-// @version      2.0
+// @version      5.0
 // @description  🖥️ CPU / GPU / Memory / FPS monitor with graph, dark mode, drag move, and persistent settings.
 // @author       O-TYAN64
 // @homepageURL  https://github.com/O-TYAN64/web-task-manager
