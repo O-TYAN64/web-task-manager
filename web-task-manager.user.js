@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Web Task Manager
 // @namespace    https://github.com/O-TYAN64/web-task-manager
-// @version      5.0
+// @version      6.0
 // @description  🖥️ CPU / GPU / Memory / FPS monitor with graph, dark mode, drag move, and persistent settings.
 // @author       O-TYAN64
 // @homepageURL  https://github.com/O-TYAN64/web-task-manager
@@ -12,107 +12,172 @@
 // @grant        none
 // ==/UserScript==
 
+
 (function() {
-  'use strict';
+    'use strict';
 
-  const domain = location.hostname;
-  const saved = JSON.parse(localStorage.getItem("taskmgr_settings_" + domain) || "{}");
-  let autoTheme = saved.autoTheme ?? true;
-  let manualTheme = saved.manualTheme ?? "dark";
+    /**********************
+     * 🧩 設定と初期UI生成
+     **********************/
+    const root = document.createElement("div");
+    Object.assign(root.style, {
+        position: "fixed",
+        bottom: "10px",
+        left: "10px",
+        width: "320px",
+        height: "160px",
+        background: "rgba(0,0,0,0.55)",
+        borderRadius: "10px",
+        color: "#fff",
+        fontFamily: "monospace",
+        fontSize: "12px",
+        zIndex: 999999,
+        backdropFilter: "blur(6px)",
+        overflow: "hidden",
+        padding: "8px"
+    });
+    document.body.appendChild(root);
 
-  const root = document.documentElement;
-  const container = document.createElement("div");
-  container.id = "taskmgr";
-  container.innerHTML = `
-    <style>
-      #taskmgr {
-        position: fixed;
-        bottom: 0;
-        width: 100%;
-        background: var(--bg);
-        color: var(--text);
-        text-align: center;
-        font-family: 'Segoe UI', sans-serif;
-        transition: background 0.3s, color 0.3s;
-        z-index: 999999;
-        user-select: none;
-      }
-      :root {
-        --bg: rgba(0, 0, 0, 0.4);
-        --text: #fff;
-      }
-      body.light {
-        --bg: rgba(255,255,255,0.5);
-        --text: #000;
-      }
-      #tmgr-controls {
-        position: absolute;
-        top: 10px;
-        right: 10px;
-      }
-      #tmgr-controls button {
-        background: transparent;
-        border: 1px solid var(--text);
-        color: var(--text);
-        margin-left: 5px;
-        cursor: pointer;
-        border-radius: 6px;
-        padding: 2px 8px;
-      }
-      #tmgr-controls button:hover {
-        background: rgba(255,255,255,0.1);
-      }
-    </style>
-    <div id="tmgr-controls">
-      <button id="toggleTheme">🌓</button>
-    </div>
-    <div style="padding:8px;">Task Manager Active</div>
-  `;
-  document.body.appendChild(container);
+    const canvas = document.createElement("canvas");
+    canvas.width = 300;
+    canvas.height = 80;
+    root.appendChild(canvas);
+    const ctx = canvas.getContext("2d");
 
-  // 🎨 テーマ適用
-  function applyTheme(theme) {
-    if (theme === "light") document.body.classList.add("light");
-    else document.body.classList.remove("light");
-  }
+    const info = document.createElement("div");
+    root.appendChild(info);
 
-  // 🌈 背景明度を自動検出
-  function detectPageBrightness() {
-    const bg = window.getComputedStyle(document.body).backgroundColor;
-    const rgb = bg.match(/\d+/g)?.map(Number);
-    if (!rgb) return 0; // fallback
-    const brightness = (rgb[0]*0.299 + rgb[1]*0.587 + rgb[2]*0.114);
-    return brightness;
-  }
+    /**********************
+     * 📊 データ履歴
+     **********************/
+    const hist = {
+        cpu: Array(60).fill(0),
+        gpu: Array(60).fill(0),
+        mem: Array(60).fill(0),
+        net: Array(60).fill(0),
+    };
 
-  function autoAdjustTheme() {
-    const brightness = detectPageBrightness();
-    if (brightness > 160) {
-      applyTheme("light");
-      manualTheme = "light";
-    } else {
-      applyTheme("dark");
-      manualTheme = "dark";
+    /**********************
+     * ⚙️ CPUモニタ
+     **********************/
+    let lastTime = performance.now();
+    let cpuUsage = 0;
+
+    function measureCPU() {
+        const start = performance.now();
+        // 負荷計測（小ループ）
+        for (let i = 0; i < 100000; i++) Math.sqrt(i);
+        const end = performance.now();
+        cpuUsage = Math.min(100, (end - start) * 4);
+        hist.cpu.push(cpuUsage);
+        hist.cpu.shift();
     }
-  }
 
-  // ⚙️ 起動時の処理
-  if (autoTheme) {
-    autoAdjustTheme();
-  } else {
-    applyTheme(manualTheme);
-  }
+    /**********************
+     * 🎮 GPUモニタ
+     **********************/
+    const gl = document.createElement("canvas").getContext("webgl");
+    let gpuUsage = 0;
+    function measureGPU() {
+        if (!gl) return;
+        const t0 = performance.now();
+        for (let i = 0; i < 10000; i++) {
+            gl.clear(gl.COLOR_BUFFER_BIT);
+        }
+        const t1 = performance.now();
+        gpuUsage = Math.min(100, (t1 - t0));
+        hist.gpu.push(gpuUsage);
+        hist.gpu.shift();
+    }
 
-  // 👆 ユーザー手動切替
-  document.getElementById("toggleTheme").addEventListener("click", () => {
-    autoTheme = false; // 自動オフ
-    manualTheme = (manualTheme === "light") ? "dark" : "light";
-    applyTheme(manualTheme);
-    localStorage.setItem("taskmgr_settings_" + domain, JSON.stringify({autoTheme, manualTheme}));
-  });
+    /**********************
+     * 💾 メモリモニタ
+     **********************/
+    let memUsage = 0;
+    function measureMEM() {
+        if (performance.memory) {
+            const usedMB = performance.memory.usedJSHeapSize / 1048576;
+            const totalMB = performance.memory.jsHeapSizeLimit / 1048576;
+            memUsage = (usedMB / totalMB) * 100;
+        } else {
+            memUsage = 0;
+        }
+        hist.mem.push(memUsage);
+        hist.mem.shift();
+    }
 
-  // 💾 状態保存
-  window.addEventListener("beforeunload", () => {
-    localStorage.setItem("taskmgr_settings_" + domain, JSON.stringify({autoTheme, manualTheme}));
-  });
+    /**********************
+     * 🌐 ネットワークモニタ
+     **********************/
+    let netDown = 0, netUp = 0;
+    let netTotal = 0;
+
+    const origFetch = window.fetch;
+    window.fetch = async function(...args) {
+        const res = await origFetch.apply(this, args);
+        const clone = res.clone();
+        const data = await clone.arrayBuffer().catch(()=>new ArrayBuffer(0));
+        netDown += data.byteLength;
+        return res;
+    };
+
+    (function() {
+        const origSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function(data) {
+            if (data) netUp += data.length || 0;
+            this.addEventListener("loadend", () => {
+                if (this.response) netDown += this.response.length || 0;
+            });
+            origSend.apply(this, arguments);
+        };
+    })();
+
+    function measureNET() {
+        netTotal = (netDown + netUp) / 1024 / 1024; // MB
+        hist.net.push(netTotal * 8); // Mbps換算
+        hist.net.shift();
+        netDown = 0;
+        netUp = 0;
+    }
+
+    /**********************
+     * 🎨 グラフ描画
+     **********************/
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const colors = {
+            cpu: "#00ff88",
+            gpu: "#88ccff",
+            mem: "#ffaa00",
+            net: "#ff66cc"
+        };
+        for (const [key, color] of Object.entries(colors)) {
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            const data = hist[key];
+            for (let i = 0; i < data.length; i++) {
+                const x = (i / data.length) * canvas.width;
+                const y = canvas.height - (data[i] / 100) * canvas.height;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+        info.innerHTML =
+            `CPU ${cpuUsage.toFixed(1)}%　` +
+            `GPU ${gpuUsage.toFixed(1)}%　` +
+            `MEM ${memUsage.toFixed(1)}%　` +
+            `NET ${(hist.net.at(-1)).toFixed(2)} Mbps`;
+    }
+
+    /**********************
+     * 🔁 更新ループ
+     **********************/
+    setInterval(() => {
+        measureCPU();
+        measureGPU();
+        measureMEM();
+        measureNET();
+        draw();
+    }, 1000);
 })();
