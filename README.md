@@ -68,6 +68,3 @@ CPU スレッド数は `navigator.hardwareConcurrency` に基づきます。
 使用率はデモ用にランダム生成されています（将来的に実測対応予定）。  
 
 ---
-
-## 📁 File Structure | ファイル構成
-
