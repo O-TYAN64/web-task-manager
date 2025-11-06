@@ -60,10 +60,8 @@
 ## 🧠 Installation / インストール方法
 
 1. **[Tampermonkey](https://www.tampermonkey.net/)** をインストール  
-2. 「新しいスクリプトを追加」  
-3. **[web_task_manager.user.js](https://raw.githubusercontent.com/O-TYAN64/web-task-manager/main/web-task-manager.user.js)** の内容を貼り付けて保存  
-7. 任意のWebページを開くと右下にタスクマネージャーが表示されます  
-
+2. 「新しいスクリプトをインストール」  
+3. **[web_task_manager.user.js](https://raw.githubusercontent.com/O-TYAN64/web-task-manager/main/web-task-manager.user.js)** (install)  
 ---
 
 ## 📷 Screenshots
