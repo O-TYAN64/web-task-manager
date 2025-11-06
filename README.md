@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-6.0-green?style=for-the-badge">
+  <img src="https://img.shields.io/badge/version-10.0-green?style=for-the-badge">
   <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge">
   <img src="https://img.shields.io/badge/Tampermonkey-Compatible-orange?style=for-the-badge">
 </p>
