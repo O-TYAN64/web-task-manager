@@ -64,15 +64,6 @@
 3. **[web_task_manager.user.js](https://raw.githubusercontent.com/O-TYAN64/web-task-manager/main/web-task-manager.user.js)** (install)  
 ---
 
-## 📷 Screenshots
-
-<p align="center">
-  <img src="docs/screenshot_dark.png" width="45%" alt="Dark Theme">
-  <img src="docs/screenshot_light.png" width="45%" alt="Light Theme">
-</p>
-
----
-
 ## ⚙️ Configuration / 設定メモ
 
 - グラフは Canvas ベースで約 30fps 更新  
