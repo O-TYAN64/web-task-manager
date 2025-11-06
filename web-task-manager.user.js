@@ -51,7 +51,7 @@
         cursor: move;
     `;
     const titleText = document.createElement("span");
-    titleText.textContent = "[ Web Task Manager ] by O-TYAN64";
+    titleText.textContent = "[ Web Task Manager ]";
 
     const btnBox = document.createElement("div");
     btnBox.style.display = "flex";
