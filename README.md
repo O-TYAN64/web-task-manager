@@ -1,70 +1,117 @@
-# 🖥️ Web Task Manager (by O-TYAN64)
+<h1 align="center">🖥️ Web Task Manager</h1>
 
-A lightweight, draggable web overlay that visualizes **CPU / GPU / Memory usage** in real time — right in your browser.  
-Built with pure JavaScript, no dependencies required.
+<p align="center">
+  <b>by O-TYAN64</b><br>
+  Lightweight, real-time CPU / GPU / Memory monitor for browsers.<br>
+  軽量でリアルタイムなブラウザ向けタスクマネージャー。
+</p>
 
-ブラウザ上で **CPU / GPU / メモリの使用率をリアルタイムで可視化** する軽量タスクマネージャー。  
-純粋な JavaScript で動作し、追加ライブラリは不要です。
-
----
-
-## ✨ Features | 機能
-
-### English
-- 📊 Real-time visualization of CPU, GPU, and memory usage  
-- 🌙 Dark / ☀️ Light theme toggle  
-- 🖱️ Movable (drag & drop) overlay window  
-- ➕ Minimize / Expand / Close buttons  
-- ⚡ No external libraries or frameworks  
-- 🧠 Works on any webpage via Tampermonkey  
-
-### 日本語
-- 📊 CPU / GPU / メモリ使用率をリアルタイムでグラフ表示  
-- 🌙 ダークモード／☀️ ライトモードの切り替え  
-- 🖱️ ドラッグで自由に移動可能なオーバーレイ  
-- ➕ 最小化・展開・閉じるボタン付き  
-- ⚡ 追加ライブラリ不要の純粋な JavaScript 実装  
-- 🧠 Tampermonkey 経由でどんなウェブページでも動作  
+<p align="center">
+  <img src="https://img.shields.io/badge/version-3.0-green?style=for-the-badge">
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=for-the-badge">
+  <img src="https://img.shields.io/badge/Tampermonkey-Compatible-orange?style=for-the-badge">
+</p>
 
 ---
 
-## 🧩 Installation | 導入方法
+## 🌟 Overview / 概要
 
-### English
-1. Install **Tampermonkey** on your browser (Chrome / Firefox / Edge).  
-2. Open the following URL to install the script:  
-   👉 [Install Web Task Manager](https://github.com/O-TYAN64/web-task-manager/raw/main/web-task-manager.user.js)  
-3. Allow Tampermonkey to add it.  
-4. Visit any webpage — the overlay should appear at the bottom right corner.  
-
-### 日本語
-1. ブラウザ（Chrome / Firefox / Edge）に **Tampermonkey** をインストールします。  
-2. 以下のリンクからスクリプトを開きます：  
-   👉 [Web Task Manager をインストール](https://github.com/O-TYAN64/web-task-manager/raw/main/web-task-manager.user.js)  
-3. Tampermonkey のインストール確認画面で「インストール」をクリックします。  
-4. 任意のウェブページを開くと、右下にタスクマネージャーが表示されます。  
+**Web Task Manager** は、ブラウザ上で CPU / GPU / メモリ使用率を  
+リアルタイムに可視化する **Tampermonkey スクリプト** です。  
+サイトを問わず動作し、軽量・シンプル・カスタマイズ可能。
 
 ---
 
-## ⚙️ Usage | 使い方
+## 🧩 Features / 機能
 
-| Button | Function | 説明 |
-|:------:|:----------|:----|
-| 🌙 / ☀️ | Toggle theme | ダーク／ライトテーマ切り替え |
-| － / ＋ | Minimize / Expand | 表示の最小化・展開 |
-| ✕ | Close | ウィンドウを閉じる |
-| Drag title bar | Move overlay | タイトルバーをドラッグで移動可能 |
+| 機能 / Feature | 内容 / Description |
+|----------------|--------------------|
+| 🧠 CPU / GPU / MEM モニタリング | 各使用率をリアルタイム表示 (30fps) |
+| 📈 折れ線グラフ | CPU🟩 / GPU🟦 / MEM🟧 の履歴を描画 |
+| 🎨 テーマ切替 | 🌙 ダーク / ☀️ ライト |
+| 📉 グラフ表示切替 | ワンクリックで非表示／再表示 |
+| 🧱 ドラッグ移動 | ウィンドウを自由に移動 |
+| ➖ 最小化ボタン | 小さくまとめて省スペース表示 |
+| 💾 状態保存 | `localStorage` にテーマ・位置・最小化状態などを保存 |
+| ⚡ 完全ネイティブ実装 | ライブラリ依存なし・軽量・純JS |
+
+---
+
+## 🕹️ Controls / 操作方法
+
+| ボタン | 説明 | Description |
+|:--:|:--|:--|
+| 🌙 / ☀️ | テーマ切替 | Toggle theme (Dark / Light) |
+| 📉 / 📈 | グラフ表示切替 | Toggle graph display |
+| － | 最小化／復元 | Minimize / Restore |
+| ✕ | 閉じる（再読込で再表示） | Close (reappears on reload) |
 
 ---
 
-## 🧠 System Info | システム情報
+## 💾 Persistent Settings / 状態保存
 
-- GPU name is retrieved using `WEBGL_debug_renderer_info` (if available).  
-- CPU thread count is based on `navigator.hardwareConcurrency`.  
-- Usage values are simulated for demo purposes (future versions may include true stats).  
+保存内容はブラウザの `localStorage` に保持され、  
+ページ更新後も前回の状態が再現されます。
 
-GPU 名は `WEBGL_debug_renderer_info` 拡張から取得しています（利用可能な場合）。  
-CPU スレッド数は `navigator.hardwareConcurrency` に基づきます。  
-使用率はデモ用にランダム生成されています（将来的に実測対応予定）。  
+| Key | 内容 / Description |
+|-----|---------------------|
+| `dark` | テーマ状態 |
+| `pos` | ウィンドウ位置 |
+| `hideGraph` | グラフON/OFF |
+| `minimized` | 最小化状態 |
 
 ---
+
+## 🧠 Installation / インストール方法
+
+1. **[Tampermonkey](https://www.tampermonkey.net/)** をインストール  
+2. 「新しいスクリプトを追加」  
+3. `web_task_manager.user.js` の内容を貼り付けて保存  
+4. 任意のWebページを開くと右下にタスクマネージャーが表示されます  
+
+---
+
+## 📷 Screenshots
+
+<p align="center">
+  <img src="docs/screenshot_dark.png" width="45%" alt="Dark Theme">
+  <img src="docs/screenshot_light.png" width="45%" alt="Light Theme">
+</p>
+
+---
+
+## ⚙️ Configuration / 設定メモ
+
+- グラフは Canvas ベースで約 30fps 更新  
+- GPU名は自動取得（長すぎる場合は自動短縮）  
+- 位置・テーマ・グラフ表示状態は自動保存  
+- ページごとに独立した設定保持  
+
+---
+
+## 🔮 Future Plans / 今後の予定
+
+- [ ] 実際のCPU/GPU使用率を取得（Performance API対応）  
+- [ ] グラフを滑らかに補間するアニメーション化  
+- [ ] カスタムカラーテーマ設定  
+- [ ] ピン固定（常に最前面表示）  
+
+---
+
+## 🧑‍💻 Author / 作者
+
+**O-TYAN64**  
+[GitHub Profile](https://github.com/O-TYAN64)
+
+---
+
+## ⚖️ License
+
+Released under the **MIT License**.  
+自由に改変・再配布可能です。クレジットの残存をお願いします。
+
+---
+
+<p align="center">
+  <sub>© 2025 O-TYAN64 — Web Task Manager v3.0</sub>
+</p>
