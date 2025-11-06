@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Web Task Manager
 // @namespace    https://github.com/O-TYAN64/web-task-manager
-// @version      10.0
-// @description  🖥️ CPU / GPU / Memory / FPS monitor with graph, dark mode, drag move, and persistent settings.
+// @version      10.2
+// @description  🖥️ Realtime CPU / GPU / Memory / NET / FPS monitor with graph & dark mode
 // @author       O-TYAN64
 // @homepageURL  https://github.com/O-TYAN64/web-task-manager
 // @updateURL    https://raw.githubusercontent.com/O-TYAN64/web-task-manager/main/web-task-manager.user.js
@@ -15,7 +15,7 @@
 (function () {
   'use strict';
 
-  const UPDATE_INTERVAL = 1000;
+  const UPDATE_INTERVAL = 200; // 🔁 より滑らかに更新
   const MEMORY_EST_TOTAL_MB = navigator.deviceMemory ? navigator.deviceMemory * 1024 : 8192;
 
   /**********************
@@ -39,8 +39,7 @@
     zIndex: 999999,
     userSelect: "none",
     overflow: "hidden",
-    resize: "both", // ← 💡サイズ変更できる
-    transition: "all 0.3s ease",
+    resize: "both",
     boxShadow: "0 0 10px rgba(0,0,0,0.3)"
   });
 
@@ -60,12 +59,8 @@
 
   canvas.width = 300;
   canvas.height = 80;
-  Object.assign(canvas.style, {
-    width: "100%",
-    display: "block"
-  });
-  Object.assign(info.style, { padding: "4px 8px" });
-  Object.assign(body.style, { padding: "4px 8px" });
+  Object.assign(canvas.style, { width: "100%", display: "block" });
+  Object.assign(info.style, { padding: "4px 8px", whiteSpace: "pre-line" });
   body.appendChild(canvas);
   body.appendChild(info);
   box.appendChild(header);
@@ -109,23 +104,23 @@
   /**********************
    * ⚙️ モニタ関数
    **********************/
-  let cpuUsage = 0, gpuUsage = 0, memUsage = 0, netRate = 0;
+  let cpuUsage = 0, gpuUsage = 0, memUsage = 0, netRate = 0, fps = 0;
   const gl = document.createElement("canvas").getContext("webgl");
 
   function measureCPU() {
     const start = performance.now();
-    for (let i = 0; i < 100000; i++) Math.sqrt(i);
+    for (let i = 0; i < 30000; i++) Math.sqrt(i);
     const end = performance.now();
-    cpuUsage = Math.min(100, (end - start) * 4);
+    cpuUsage = Math.min(100, (end - start) * 6);
     hist.cpu.push(cpuUsage); hist.cpu.shift();
   }
 
   function measureGPU() {
     if (!gl) return;
     const t0 = performance.now();
-    for (let i = 0; i < 5000; i++) gl.clear(gl.COLOR_BUFFER_BIT);
+    for (let i = 0; i < 3000; i++) gl.clear(gl.COLOR_BUFFER_BIT);
     const t1 = performance.now();
-    gpuUsage = Math.min(100, (t1 - t0));
+    gpuUsage = Math.min(100, (t1 - t0) * 5);
     hist.gpu.push(gpuUsage); hist.gpu.shift();
   }
 
@@ -133,6 +128,9 @@
     if (performance.memory) {
       const usedMB = performance.memory.usedJSHeapSize / 1048576;
       memUsage = Math.min(100, (usedMB / MEMORY_EST_TOTAL_MB) * 100);
+    } else {
+      // fallback: approximate memory by CPU usage oscillation
+      memUsage = Math.min(100, (memUsage * 0.9) + (cpuUsage * 0.1));
     }
     hist.mem.push(memUsage);
     hist.mem.shift();
@@ -188,33 +186,16 @@
       ctx.stroke();
     }
     info.innerText =
-      `CPU ${cpuUsage.toFixed(1)}%　GPU ${gpuUsage.toFixed(1)}%　MEM ${memUsage.toFixed(1)}%　NET ${netRate.toFixed(2)} Mbps`;
+      `FPS ${fps.toFixed(1)}　CPU ${cpuUsage.toFixed(1)}%　GPU ${gpuUsage.toFixed(1)}%　MEM ${memUsage.toFixed(1)}%　NET ${netRate.toFixed(2)} Mbps`;
   }
 
   /**********************
-   * 🎞 FPS表示（常に最前面）
+   * 🎞 FPS測定
    **********************/
-  const fpsBox = document.createElement("div");
-  Object.assign(fpsBox.style, {
-    position: "fixed",
-    top: "8px",
-    left: "8px",
-    padding: "3px 6px",
-    fontFamily: "Consolas, monospace",
-    fontSize: "13px",
-    borderRadius: "4px",
-    zIndex: 1000000,
-    pointerEvents: "none",
-    background: "rgba(0,0,0,0.5)",
-    color: "#0f0"
-  });
-  document.body.appendChild(fpsBox);
-
-  let lastTime = performance.now(), fps = 0;
+  let lastTime = performance.now();
   function fpsLoop(now) {
     fps = 1000 / (now - lastTime);
     lastTime = now;
-    fpsBox.textContent = `FPS: ${fps.toFixed(1)}`;
     requestAnimationFrame(fpsLoop);
   }
   requestAnimationFrame(fpsLoop);
