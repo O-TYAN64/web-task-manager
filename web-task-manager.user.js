@@ -21,6 +21,7 @@
   let minimized = saved.minimized ?? false;
   let hideGraph = saved.hideGraph ?? false;
   let pos = saved.pos ?? { x: null, y: null };
+  let autoTheme = true; // ← 自動検出ON（手動切り替えしたらfalse）
 
   const wrapper = document.createElement("div");
   wrapper.style.cssText = `
@@ -83,7 +84,7 @@
   wrapper.appendChild(canvas);
   wrapper.appendChild(legend);
 
-  // === テーマ切替 ===
+  // === テーマ適用 ===
   function applyTheme() {
     const color = dark ? "#00ff88" : "#003300";
     wrapper.style.background = dark ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.9)";
@@ -95,6 +96,23 @@
     }
   }
   applyTheme();
+
+  // === 明度検出 ===
+  function detectPageBrightness() {
+    try {
+      const bg = getComputedStyle(document.body).backgroundColor;
+      const rgb = bg.match(/\d+/g);
+      if (!rgb) return;
+      const [r, g, b] = rgb.map(Number);
+      const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+      const shouldBeDark = luminance < 128;
+      if (autoTheme && shouldBeDark !== dark) {
+        dark = shouldBeDark;
+        applyTheme();
+      }
+    } catch (e) {}
+  }
+  setInterval(detectPageBrightness, 2000); // 2秒おきに確認
 
   // === ドラッグ移動 ===
   let isDragging = false,
@@ -136,10 +154,8 @@
   } catch {}
   const cpuThreads = navigator.hardwareConcurrency || "N/A";
 
-  // === FPS計測 ===
-  let fps = 0;
-  let frameCount = 0;
-  let lastTime = performance.now();
+  // === FPS測定 ===
+  let fps = 0, frameCount = 0, lastTime = performance.now();
   function measureFPS() {
     frameCount++;
     const now = performance.now();
@@ -156,9 +172,7 @@
   const cpuHistory = Array(60).fill(0);
   const gpuHistory = Array(60).fill(0);
   const memHistory = Array(60).fill(0);
-  let cpuUsage = 0,
-    gpuUsage = 0,
-    memUsage = 0;
+  let cpuUsage = 0, gpuUsage = 0, memUsage = 0;
 
   function randomUsage(base) {
     return Math.min(100, Math.max(0, base + (Math.random() - 0.5) * 10));
@@ -233,6 +247,7 @@
   // === ボタン ===
   document.getElementById("themeBtn").onclick = () => {
     dark = !dark;
+    autoTheme = false; // ← 手動操作したら自動無効
     applyTheme();
     saveSettings();
   };
