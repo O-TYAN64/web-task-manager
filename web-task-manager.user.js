@@ -2,7 +2,7 @@
 // @name         Web Task Manager
 // @namespace    https://github.com/O-TYAN64/web-task-manager
 // @version      2.0
-// @description  🖥️ CPU / GPU / Memory / FPS monitor with graph, dark mode, drag move, and control buttons. | CPU / GPU / メモリ / FPS 使用率をリアルタイムで可視化するWebタスクマネージャー。
+// @description  🖥️ CPU / GPU / Memory / FPS monitor with graph, dark mode, drag move, and persistent settings.
 // @author       O-TYAN64
 // @homepageURL  https://github.com/O-TYAN64/web-task-manager
 // @updateURL    https://raw.githubusercontent.com/O-TYAN64/web-task-manager/main/web-task-manager.user.js
@@ -16,7 +16,6 @@
   "use strict";
 
   const STORE_KEY = "webTaskManagerSettings";
-
   const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
   let dark = saved.dark ?? true;
   let minimized = saved.minimized ?? false;
@@ -62,10 +61,10 @@
   titleBar.innerHTML = `
     <span>[ Web Task Manager ]</span>
     <div style="display:flex; gap:4px;">
-      <button id="graphBtn" title="Show/Hide Graph" style="background:none;border:1px solid #00ff88;color:#00ff88;border-radius:4px;width:22px;height:22px;cursor:pointer;">${hideGraph ? "📈" : "📉"}</button>
-      <button id="themeBtn" title="Toggle Theme" style="background:none;border:1px solid #00ff88;color:#00ff88;border-radius:4px;width:22px;height:22px;cursor:pointer;">${dark ? "🌙" : "☀️"}</button>
-      <button id="minBtn" title="Minimize" style="background:none;border:1px solid #00ff88;color:#00ff88;border-radius:4px;width:22px;height:22px;cursor:pointer;">－</button>
-      <button id="closeBtn" title="Close" style="background:none;border:1px solid #00ff88;color:#00ff88;border-radius:4px;width:22px;height:22px;cursor:pointer;">✕</button>
+        <button id="graphBtn" title="Show/Hide Graph" style="background:none;border:1px solid #00ff88;color:#00ff88;border-radius:4px;width:22px;height:22px;cursor:pointer;">${hideGraph ? "📈" : "📉"}</button>
+        <button id="themeBtn" title="Toggle Theme" style="background:none;border:1px solid #00ff88;color:#00ff88;border-radius:4px;width:22px;height:22px;cursor:pointer;">${dark ? "🌙" : "☀️"}</button>
+        <button id="minBtn" title="Minimize" style="background:none;border:1px solid #00ff88;color:#00ff88;border-radius:4px;width:22px;height:22px;cursor:pointer;">－</button>
+        <button id="closeBtn" title="Close" style="background:none;border:1px solid #00ff88;color:#00ff88;border-radius:4px;width:22px;height:22px;cursor:pointer;">✕</button>
     </div>
   `;
   wrapper.appendChild(titleBar);
@@ -84,6 +83,7 @@
   wrapper.appendChild(canvas);
   wrapper.appendChild(legend);
 
+  // === テーマ切替 ===
   function applyTheme() {
     const color = dark ? "#00ff88" : "#003300";
     wrapper.style.background = dark ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.9)";
@@ -96,7 +96,7 @@
   }
   applyTheme();
 
-  // --- Drag Move ---
+  // === ドラッグ移動 ===
   let isDragging = false,
     offsetX = 0,
     offsetY = 0;
@@ -120,7 +120,7 @@
     wrapper.style.bottom = "auto";
   });
 
-  // --- GPU Info ---
+  // === GPU情報 ===
   let gpuName = "GPU: Unknown";
   try {
     const c = document.createElement("canvas");
@@ -129,21 +129,36 @@
       const ext = gl.getExtension("WEBGL_debug_renderer_info");
       if (ext) {
         gpuName = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
-        gpuName = gpuName.replace(/^ANGLE\\s*\\(/, "").replace(/\\)$/g, "");
+        gpuName = gpuName.replace(/^ANGLE\s*\(/, "").replace(/\)$/g, "");
         if (gpuName.length > 40) gpuName = gpuName.slice(0, 37) + "...";
       }
     }
   } catch {}
   const cpuThreads = navigator.hardwareConcurrency || "N/A";
 
-  // --- Graph & Stats ---
+  // === FPS計測 ===
+  let fps = 0;
+  let frameCount = 0;
+  let lastTime = performance.now();
+  function measureFPS() {
+    frameCount++;
+    const now = performance.now();
+    if (now - lastTime >= 1000) {
+      fps = frameCount;
+      frameCount = 0;
+      lastTime = now;
+    }
+    requestAnimationFrame(measureFPS);
+  }
+  requestAnimationFrame(measureFPS);
+
+  // === グラフ ===
   const cpuHistory = Array(60).fill(0);
   const gpuHistory = Array(60).fill(0);
   const memHistory = Array(60).fill(0);
   let cpuUsage = 0,
     gpuUsage = 0,
-    memUsage = 0,
-    fps = 0;
+    memUsage = 0;
 
   function randomUsage(base) {
     return Math.min(100, Math.max(0, base + (Math.random() - 0.5) * 10));
@@ -167,22 +182,6 @@
     drawLine(memHistory, "#ffaa00");
   }
 
-  // --- FPS計測 ---
-  let frameCount = 0;
-  let lastTime = performance.now();
-  function calcFPS() {
-    frameCount++;
-    const now = performance.now();
-    if (now - lastTime >= 1000) {
-      fps = frameCount;
-      frameCount = 0;
-      lastTime = now;
-    }
-    requestAnimationFrame(calcFPS);
-  }
-  calcFPS();
-
-  // --- Stats更新 ---
   function updateStats() {
     cpuUsage = randomUsage(cpuUsage);
     gpuUsage = randomUsage(gpuUsage);
@@ -195,18 +194,18 @@
     if (memHistory.length > 60) memHistory.shift();
 
     info.innerHTML = `
-    CPU: ${cpuThreads} Threads<br>
-    GPU: ${gpuName}<br><br>
-    CPU: ${cpuUsage.toFixed(1)}%<br>
-    GPU: ${gpuUsage.toFixed(1)}%<br>
-    MEM: ${memUsage.toFixed(1)}%<br>
-    FPS: ${fps.toFixed(0)} fps`;
+      CPU: ${cpuThreads} Threads<br>
+      GPU: ${gpuName}<br>
+      FPS: ${fps}<br><br>
+      CPU: ${cpuUsage.toFixed(1)}%<br>
+      GPU: ${gpuUsage.toFixed(1)}%<br>
+      MEM: ${memUsage.toFixed(1)}%`;
 
     if (!hideGraph) drawGraph();
   }
   setInterval(updateStats, 1000 / 30);
 
-  // --- UI復元 ---
+  // === 状態復元 ===
   if (minimized) {
     info.style.display = "none";
     canvas.style.display = "none";
@@ -218,6 +217,7 @@
     legend.style.display = "none";
   }
 
+  // === 保存 ===
   function saveSettings() {
     localStorage.setItem(
       STORE_KEY,
@@ -230,7 +230,7 @@
     );
   }
 
-  // --- Buttons ---
+  // === ボタン ===
   document.getElementById("themeBtn").onclick = () => {
     dark = !dark;
     applyTheme();
