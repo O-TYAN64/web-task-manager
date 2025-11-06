@@ -4,6 +4,8 @@
 // @version      12.0
 // @description  CPU / GPU / Memory / FPS monitor with compact mode, transparency, dark-site support, and persistent position
 // @author       O-TYAN
+// @homepageURL  https://github.com/O-TYAN64/web-task-manager
+// @updateURL    https://raw.githubusercontent.com/O-TYAN64/web-task-manager/main/web-task-manager.user.js
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
