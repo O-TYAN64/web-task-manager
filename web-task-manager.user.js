@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Web Task Manager (Dark Site Visible Edition)
 // @namespace    https://github.com/O-TYAN64/web-task-manager
-// @version      13.0
+// @version      14.0
 // @description  CPU / GPU / Memory / FPS monitor with compact mode, transparency, dark-site support, and persistent position
 // @author       O-TYAN
 // @homepageURL  https://github.com/O-TYAN64/web-task-manager
