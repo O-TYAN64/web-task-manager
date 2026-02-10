@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Web Task Manager (Dark Site Visible Edition)
 // @namespace    https://github.com/O-TYAN64/web-task-manager
-// @version      16.0
+// @version      17.0
 // @description  CPU / GPU / Memory / FPS monitor with compact mode, transparency, dark-site support, and persistent position
 // @author       O-TYAN
 // @homepageURL  https://github.com/O-TYAN64/web-task-manager
@@ -13,11 +13,10 @@
 (() => {
   'use strict';
 
-  const UPDATE_INTERVAL = 1000; // ★ 1秒更新（重要）
-  const HISTORY_LEN = 60;       // ★ 60秒分
-  const MEMORY_EST_TOTAL_MB = navigator.deviceMemory
-    ? navigator.deviceMemory * 1024
-    : 8192;
+  const UPDATE_INTERVAL = 1000; // 1秒更新
+  const HISTORY_LEN = 60;       // 60秒分
+  const MEMORY_EST_TOTAL_MB =
+    navigator.deviceMemory ? navigator.deviceMemory * 1024 : 8192;
 
   /*************** UI ***************/
   const box = document.createElement("div");
@@ -25,7 +24,6 @@
   const body = document.createElement("div");
   const canvas = document.createElement("canvas");
   const info = document.createElement("div");
-  const opacitySlider = document.createElement("input");
   const compactBtn = document.createElement("button");
 
   Object.assign(box.style, {
@@ -63,15 +61,12 @@
   compactBtn.style.cursor = "pointer";
   header.appendChild(compactBtn);
 
-  opacitySlider.type = "range";
-  opacitySlider.min = 0.3;
-  opacitySlider.max = 1.0;
-  opacitySlider.step = 0.05;
-  opacitySlider.value = 0.85;
+  Object.assign(info.style, {
+    padding: "4px 8px",
+    whiteSpace: "pre-line"
+  });
 
-  Object.assign(info.style, { padding: "4px 8px", whiteSpace: "pre-line" });
-
-  body.append(canvas, info, opacitySlider);
+  body.append(canvas, info);
   box.append(header, body);
   document.body.appendChild(box);
 
@@ -114,7 +109,8 @@
     mem: new Array(HISTORY_LEN).fill(0),
     net: new Array(HISTORY_LEN).fill(0),
   };
-  let ptr = 0;
+
+  let ptr = 0; // 次に書く位置（最新の次）
 
   let cpu = 0, gpu = 0, mem = 0, net = 0, fps = 0;
   const gl = document.createElement("canvas").getContext("webgl");
@@ -181,12 +177,15 @@
     for (const key in colors) {
       ctx.beginPath();
       ctx.strokeStyle = colors[key];
+
       for (let i = 0; i < HISTORY_LEN; i++) {
+        // ★ 一番古い → 最新の順で読む
         const idx = (ptr + i) % HISTORY_LEN;
         const x = Math.round(i / (HISTORY_LEN - 1) * canvas.width);
         const y =
           canvas.height -
           Math.min(1, hist[key][idx] / 100) * canvas.height;
+
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
       ctx.stroke();
@@ -211,7 +210,8 @@
     measureGPU();
     measureMEM();
     measureNET();
-    ptr = (ptr + 1) % HISTORY_LEN;
-    draw(); // ★ 1回だけ
+
+    draw();                    // ★ 先に描く
+    ptr = (ptr + 1) % HISTORY_LEN; // ★ 最後に進める
   }, UPDATE_INTERVAL);
 })();
