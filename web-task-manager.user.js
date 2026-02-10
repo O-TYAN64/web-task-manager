@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Web Task Manager (Dark Site Visible Edition)
 // @namespace    https://github.com/O-TYAN64/web-task-manager
-// @version      12.0
+// @version      13.0
 // @description  CPU / GPU / Memory / FPS monitor with compact mode, transparency, dark-site support, and persistent position
 // @author       O-TYAN
 // @homepageURL  https://github.com/O-TYAN64/web-task-manager
@@ -10,7 +10,7 @@
 // @grant        none
 // ==/UserScript==
 
-(function() {
+(() => {
   'use strict';
 
   const UPDATE_INTERVAL = 200;
@@ -43,7 +43,6 @@
     userSelect: "none",
   });
 
-  // restore saved position
   const savedX = localStorage.getItem("wtm-left");
   const savedY = localStorage.getItem("wtm-top");
   if (savedX && savedY) {
@@ -82,10 +81,10 @@
     cursor: "pointer",
   });
 
-  canvas.width = 300;
-  canvas.height = 80;
-  Object.assign(canvas.style, { width: "100%", display: "block" });
-  Object.assign(info.style, { padding: "4px 8px", whiteSpace: "pre-line" });
+  Object.assign(info.style, {
+    padding: "4px 8px",
+    whiteSpace: "pre-line"
+  });
 
   body.appendChild(canvas);
   body.appendChild(info);
@@ -111,30 +110,41 @@
     localStorage.setItem("wtm-top", parseInt(box.style.top));
   });
 
-  /*************** サイズ記録 ***************/
+  /*************** サイズ保存 & canvas追従 ***************/
+  function resizeCanvas() {
+    canvas.width = box.clientWidth - 16;
+    canvas.height = 80;
+  }
+
   new ResizeObserver(() => {
     localStorage.setItem("wtm-width", box.offsetWidth);
     localStorage.setItem("wtm-height", box.offsetHeight);
+    resizeCanvas();
   }).observe(box);
+  resizeCanvas();
 
-  /*************** コンパクトモード ***************/
+  /*************** コンパクト ***************/
   let compact = false;
   compactBtn.onclick = () => {
     compact = !compact;
     body.style.display = compact ? "none" : "block";
   };
 
-  /*************** データ履歴 ***************/
-  const hist = { cpu: Array(60).fill(0), gpu: Array(60).fill(0), mem: Array(60).fill(0), net: Array(60).fill(0) };
+  /*************** 履歴 ***************/
+  const hist = {
+    cpu: Array(60).fill(0),
+    gpu: Array(60).fill(0),
+    mem: Array(60).fill(0),
+    net: Array(60).fill(0)
+  };
 
   let cpuUsage = 0, gpuUsage = 0, memUsage = 0, netRate = 0, fps = 0;
   const gl = document.createElement("canvas").getContext("webgl");
 
   function measureCPU() {
-    const start = performance.now();
+    const t0 = performance.now();
     for (let i = 0; i < 30000; i++) Math.sqrt(i);
-    const end = performance.now();
-    cpuUsage = Math.min(100, (end - start) * 6);
+    cpuUsage = Math.min(100, (performance.now() - t0) * 6);
     hist.cpu.push(cpuUsage); hist.cpu.shift();
   }
 
@@ -142,8 +152,7 @@
     if (!gl) return;
     const t0 = performance.now();
     for (let i = 0; i < 3000; i++) gl.clear(gl.COLOR_BUFFER_BIT);
-    const t1 = performance.now();
-    gpuUsage = Math.min(100, (t1 - t0) * 5);
+    gpuUsage = Math.min(100, (performance.now() - t0) * 5);
     hist.gpu.push(gpuUsage); hist.gpu.shift();
   }
 
@@ -152,72 +161,89 @@
       const usedMB = performance.memory.usedJSHeapSize / 1048576;
       memUsage = Math.min(100, (usedMB / MEMORY_EST_TOTAL_MB) * 100);
     } else {
-      memUsage = Math.min(100, (memUsage * 0.9) + (cpuUsage * 0.1));
+      memUsage = memUsage * 0.9 + cpuUsage * 0.1;
     }
     hist.mem.push(memUsage); hist.mem.shift();
   }
 
+  /*************** Network（軽量） ***************/
   let netDown = 0, netUp = 0;
+
   const origFetch = window.fetch;
-  window.fetch = async function (...args) {
-    const res = await origFetch.apply(this, args);
-    const clone = res.clone();
-    const data = await clone.arrayBuffer().catch(() => new ArrayBuffer(0));
-    netDown += data.byteLength;
+  window.fetch = async (...args) => {
+    const res = await origFetch(...args);
+    const len = res.headers.get("content-length");
+    if (len) netDown += Number(len);
     return res;
   };
 
   const origSend = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.send = function (data) {
-    if (data) netUp += data.length || 0;
+    if (data?.length) netUp += data.length;
     this.addEventListener("loadend", () => {
-      if (this.response) netDown += (this.response.length || 0);
+      if (this.response instanceof ArrayBuffer) {
+        netDown += this.response.byteLength;
+      }
     });
-    origSend.apply(this, arguments);
+    return origSend.apply(this, arguments);
   };
 
   function measureNET() {
-    netRate = (netDown + netUp) / 1024 / 1024 * 8;
+    const intervalSec = UPDATE_INTERVAL / 1000;
+    netRate = ((netDown + netUp) * 8) / 1024 / 1024 / intervalSec;
     hist.net.push(netRate); hist.net.shift();
     netDown = netUp = 0;
   }
 
-  /*************** グラフ ***************/
+  /*************** 描画 ***************/
   const ctx = canvas.getContext("2d");
+
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const colors = { cpu: "#00ff88", gpu: "#88ccff", mem: "#ffaa00", net: "#ff66cc" };
-    for (const [key, color] of Object.entries(colors)) {
+    const colors = {
+      cpu: "#00ff88",
+      gpu: "#88ccff",
+      mem: "#ffaa00",
+      net: "#ff66cc"
+    };
+
+    for (const key in colors) {
       ctx.beginPath();
-      ctx.strokeStyle = color;
+      ctx.strokeStyle = colors[key];
       const data = hist[key];
       for (let i = 0; i < data.length; i++) {
-        const x = (i / data.length) * canvas.width;
-        const y = canvas.height - (data[i] / 100) * canvas.height;
+        const x = (i / (data.length - 1)) * canvas.width;
+        const y = canvas.height - Math.min(1, data[i] / 100) * canvas.height;
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
       ctx.stroke();
     }
-    info.innerText = `FPS ${fps.toFixed(1)} | CPU ${cpuUsage.toFixed(1)}% | GPU ${gpuUsage.toFixed(1)}% | MEM ${memUsage.toFixed(1)}% | NET ${netRate.toFixed(2)} Mbps`;
+
+    info.innerText =
+      `FPS ${fps.toFixed(1)} | ` +
+      `CPU ${cpuUsage.toFixed(1)}% | ` +
+      `GPU ${gpuUsage.toFixed(1)}% | ` +
+      `MEM ${memUsage.toFixed(1)}% | ` +
+      `NET ${netRate.toFixed(2)} Mbps`;
   }
 
-  /*************** FPS測定 ***************/
-  let lastTime = performance.now();
+  /*************** FPS（安定） ***************/
+  let last = performance.now();
   function fpsLoop(now) {
-    fps = 1000 / (now - lastTime);
-    lastTime = now;
+    const inst = 1000 / (now - last);
+    fps = fps * 0.9 + inst * 0.1;
+    last = now;
     requestAnimationFrame(fpsLoop);
   }
   requestAnimationFrame(fpsLoop);
 
-  /*************** テーマ自動検出 ***************/
+  /*************** テーマ検出 ***************/
   function detectTheme() {
-    const bg = window.getComputedStyle(document.body).backgroundColor;
-    if (!bg) return;
-    const rgb = bg.match(/\d+/g);
+    const bg = getComputedStyle(document.body).backgroundColor;
+    const rgb = bg?.match(/\d+/g);
     if (!rgb) return;
-    const brightness = (rgb[0]*0.299 + rgb[1]*0.587 + rgb[2]*0.114);
-    if (brightness > 128) {
+    const b = rgb[0]*0.299 + rgb[1]*0.587 + rgb[2]*0.114;
+    if (b > 128) {
       box.style.background = `rgba(255,255,255,${opacitySlider.value})`;
       box.style.color = "#111";
       header.style.background = "rgba(240,240,240,0.9)";
@@ -229,14 +255,17 @@
   }
   setInterval(detectTheme, 2000);
 
-  /*************** 透明度変更 ***************/
-  opacitySlider.addEventListener("input", () => {
+  opacitySlider.oninput = () => {
     localStorage.setItem("wtm-opacity", opacitySlider.value);
     detectTheme();
-  });
+  };
 
-  /*************** 更新ループ ***************/
+  /*************** 更新 ***************/
   setInterval(() => {
-    measureCPU(); measureGPU(); measureMEM(); measureNET(); draw();
+    measureCPU();
+    measureGPU();
+    measureMEM();
+    measureNET();
+    draw();
   }, UPDATE_INTERVAL);
 })();
