@@ -14,6 +14,7 @@
   'use strict';
 
   const UPDATE_INTERVAL = 200;
+  const HISTORY_LEN = 60;
   const MEMORY_EST_TOTAL_MB = navigator.deviceMemory ? navigator.deviceMemory * 1024 : 8192;
 
   /*************** UI ***************/
@@ -43,14 +44,6 @@
     userSelect: "none",
   });
 
-  const savedX = localStorage.getItem("wtm-left");
-  const savedY = localStorage.getItem("wtm-top");
-  if (savedX && savedY) {
-    box.style.left = savedX + "px";
-    box.style.top = savedY + "px";
-    box.style.bottom = "auto";
-  }
-
   header.innerHTML = `<b>Web Task Manager</b>`;
   Object.assign(header.style, {
     cursor: "move",
@@ -62,13 +55,10 @@
   });
 
   compactBtn.textContent = "🗕";
-  Object.assign(compactBtn.style, {
-    background: "none",
-    border: "none",
-    color: "inherit",
-    cursor: "pointer",
-    fontSize: "14px",
-  });
+  compactBtn.style.background = "none";
+  compactBtn.style.border = "none";
+  compactBtn.style.color = "inherit";
+  compactBtn.style.cursor = "pointer";
   header.appendChild(compactBtn);
 
   opacitySlider.type = "range";
@@ -76,130 +66,109 @@
   opacitySlider.max = 1.0;
   opacitySlider.step = 0.05;
   opacitySlider.value = localStorage.getItem("wtm-opacity") || 0.85;
-  Object.assign(opacitySlider.style, {
-    width: "100%",
-    cursor: "pointer",
-  });
 
-  Object.assign(info.style, {
-    padding: "4px 8px",
-    whiteSpace: "pre-line"
-  });
+  Object.assign(info.style, { padding: "4px 8px", whiteSpace: "pre-line" });
 
-  body.appendChild(canvas);
-  body.appendChild(info);
-  body.appendChild(opacitySlider);
-  box.appendChild(header);
-  box.appendChild(body);
+  body.append(canvas, info, opacitySlider);
+  box.append(header, body);
   document.body.appendChild(box);
 
-  /*************** 移動 ***************/
-  let dragging = false, offsetX = 0, offsetY = 0;
-  header.addEventListener("mousedown", e => {
-    dragging = true;
-    offsetX = e.clientX - box.offsetLeft;
-    offsetY = e.clientY - box.offsetTop;
-  });
-  document.addEventListener("mouseup", () => dragging = false);
-  document.addEventListener("mousemove", e => {
-    if (!dragging) return;
-    box.style.left = e.clientX - offsetX + "px";
-    box.style.top = e.clientY - offsetY + "px";
-    box.style.bottom = "auto";
-    localStorage.setItem("wtm-left", parseInt(box.style.left));
-    localStorage.setItem("wtm-top", parseInt(box.style.top));
-  });
+  /*************** Canvas ***************/
+  const ctx = canvas.getContext("2d");
 
-  /*************** サイズ保存 & canvas追従 ***************/
   function resizeCanvas() {
     canvas.width = box.clientWidth - 16;
     canvas.height = 80;
   }
-
-  new ResizeObserver(() => {
-    localStorage.setItem("wtm-width", box.offsetWidth);
-    localStorage.setItem("wtm-height", box.offsetHeight);
-    resizeCanvas();
-  }).observe(box);
   resizeCanvas();
+  new ResizeObserver(resizeCanvas).observe(box);
 
-  /*************** コンパクト ***************/
+  /*************** Drag ***************/
+  let drag = false, ox = 0, oy = 0;
+  header.onmousedown = e => {
+    drag = true;
+    ox = e.clientX - box.offsetLeft;
+    oy = e.clientY - box.offsetTop;
+  };
+  document.onmouseup = () => drag = false;
+  document.onmousemove = e => {
+    if (!drag) return;
+    box.style.left = e.clientX - ox + "px";
+    box.style.top = e.clientY - oy + "px";
+    box.style.bottom = "auto";
+  };
+
+  /*************** Compact ***************/
   let compact = false;
   compactBtn.onclick = () => {
     compact = !compact;
     body.style.display = compact ? "none" : "block";
   };
 
-  /*************** 履歴 ***************/
+  /*************** Ring Buffers ***************/
   const hist = {
-    cpu: Array(60).fill(0),
-    gpu: Array(60).fill(0),
-    mem: Array(60).fill(0),
-    net: Array(60).fill(0)
+    cpu: new Array(HISTORY_LEN).fill(0),
+    gpu: new Array(HISTORY_LEN).fill(0),
+    mem: new Array(HISTORY_LEN).fill(0),
+    net: new Array(HISTORY_LEN).fill(0),
   };
+  let ptr = 0;
 
-  let cpuUsage = 0, gpuUsage = 0, memUsage = 0, netRate = 0, fps = 0;
+  let cpu = 0, gpu = 0, mem = 0, net = 0, fps = 0;
   const gl = document.createElement("canvas").getContext("webgl");
 
+  function push(v, key) {
+    hist[key][ptr] = v;
+  }
+
+  /*************** Measure ***************/
   function measureCPU() {
-    const t0 = performance.now();
+    const t = performance.now();
     for (let i = 0; i < 30000; i++) Math.sqrt(i);
-    cpuUsage = Math.min(100, (performance.now() - t0) * 6);
-    hist.cpu.push(cpuUsage); hist.cpu.shift();
+    cpu = Math.min(100, (performance.now() - t) * 6);
+    push(cpu, "cpu");
   }
 
   function measureGPU() {
     if (!gl) return;
-    const t0 = performance.now();
+    const t = performance.now();
     for (let i = 0; i < 3000; i++) gl.clear(gl.COLOR_BUFFER_BIT);
-    gpuUsage = Math.min(100, (performance.now() - t0) * 5);
-    hist.gpu.push(gpuUsage); hist.gpu.shift();
+    gpu = Math.min(100, (performance.now() - t) * 5);
+    push(gpu, "gpu");
   }
 
   function measureMEM() {
     if (performance.memory) {
-      const usedMB = performance.memory.usedJSHeapSize / 1048576;
-      memUsage = Math.min(100, (usedMB / MEMORY_EST_TOTAL_MB) * 100);
-    } else {
-      memUsage = memUsage * 0.9 + cpuUsage * 0.1;
+      const used = performance.memory.usedJSHeapSize / 1048576;
+      mem = Math.min(100, used / MEMORY_EST_TOTAL_MB * 100);
     }
-    hist.mem.push(memUsage); hist.mem.shift();
+    push(mem, "mem");
   }
 
-  /*************** Network（軽量） ***************/
-  let netDown = 0, netUp = 0;
-
-  const origFetch = window.fetch;
-  window.fetch = async (...args) => {
-    const res = await origFetch(...args);
-    const len = res.headers.get("content-length");
-    if (len) netDown += Number(len);
-    return res;
-  };
-
-  const origSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.send = function (data) {
-    if (data?.length) netUp += data.length;
-    this.addEventListener("loadend", () => {
-      if (this.response instanceof ArrayBuffer) {
-        netDown += this.response.byteLength;
-      }
-    });
-    return origSend.apply(this, arguments);
+  let down = 0, up = 0;
+  const ofetch = fetch;
+  fetch = async (...a) => {
+    const r = await ofetch(...a);
+    const l = r.headers.get("content-length");
+    if (l) down += +l;
+    return r;
   };
 
   function measureNET() {
-    const intervalSec = UPDATE_INTERVAL / 1000;
-    netRate = ((netDown + netUp) * 8) / 1024 / 1024 / intervalSec;
-    hist.net.push(netRate); hist.net.shift();
-    netDown = netUp = 0;
+    net = ((down + up) * 8) / 1024 / 1024 / (UPDATE_INTERVAL / 1000);
+    push(net, "net");
+    down = up = 0;
   }
 
-  /*************** 描画 ***************/
-  const ctx = canvas.getContext("2d");
-
+  /*************** Draw (NO FLICKER) ***************/
   function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+
     const colors = {
       cpu: "#00ff88",
       gpu: "#88ccff",
@@ -210,62 +179,35 @@
     for (const key in colors) {
       ctx.beginPath();
       ctx.strokeStyle = colors[key];
-      const data = hist[key];
-      for (let i = 0; i < data.length; i++) {
-        const x = (i / (data.length - 1)) * canvas.width;
-        const y = canvas.height - Math.min(1, data[i] / 100) * canvas.height;
+      for (let i = 0; i < HISTORY_LEN; i++) {
+        const idx = (ptr + i) % HISTORY_LEN;
+        const x = Math.round(i / (HISTORY_LEN - 1) * canvas.width);
+        const y = canvas.height - Math.min(1, hist[key][idx] / 100) * canvas.height;
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
       ctx.stroke();
     }
 
-    info.innerText =
-      `FPS ${fps.toFixed(1)} | ` +
-      `CPU ${cpuUsage.toFixed(1)}% | ` +
-      `GPU ${gpuUsage.toFixed(1)}% | ` +
-      `MEM ${memUsage.toFixed(1)}% | ` +
-      `NET ${netRate.toFixed(2)} Mbps`;
+    info.textContent =
+      `FPS ${fps.toFixed(1)} | CPU ${cpu.toFixed(1)}% | GPU ${gpu.toFixed(1)}% | MEM ${mem.toFixed(1)}% | NET ${net.toFixed(2)} Mbps`;
   }
 
-  /*************** FPS（安定） ***************/
+  /*************** FPS ***************/
   let last = performance.now();
-  function fpsLoop(now) {
-    const inst = 1000 / (now - last);
-    fps = fps * 0.9 + inst * 0.1;
-    last = now;
+  function fpsLoop(t) {
+    fps = fps * 0.9 + (1000 / (t - last)) * 0.1;
+    last = t;
     requestAnimationFrame(fpsLoop);
   }
   requestAnimationFrame(fpsLoop);
 
-  /*************** テーマ検出 ***************/
-  function detectTheme() {
-    const bg = getComputedStyle(document.body).backgroundColor;
-    const rgb = bg?.match(/\d+/g);
-    if (!rgb) return;
-    const b = rgb[0]*0.299 + rgb[1]*0.587 + rgb[2]*0.114;
-    if (b > 128) {
-      box.style.background = `rgba(255,255,255,${opacitySlider.value})`;
-      box.style.color = "#111";
-      header.style.background = "rgba(240,240,240,0.9)";
-    } else {
-      box.style.background = `rgba(20,20,20,${opacitySlider.value})`;
-      box.style.color = "#ccf";
-      header.style.background = "rgba(0,255,255,0.1)";
-    }
-  }
-  setInterval(detectTheme, 2000);
-
-  opacitySlider.oninput = () => {
-    localStorage.setItem("wtm-opacity", opacitySlider.value);
-    detectTheme();
-  };
-
-  /*************** 更新 ***************/
+  /*************** Update ***************/
   setInterval(() => {
     measureCPU();
     measureGPU();
     measureMEM();
     measureNET();
+    ptr = (ptr + 1) % HISTORY_LEN;
     draw();
   }, UPDATE_INTERVAL);
 })();
